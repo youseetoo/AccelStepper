@@ -486,6 +486,9 @@ public:
     /// to stop as quickly as possible, using the current speed and acceleration parameters.
     void stop();
 
+    //returns the current outputstate
+    bool areOutputsEnabled();
+
     /// Disable motor pin outputs by setting them all LOW
     /// Depending on the design of your electronics this may turn off
     /// the power to the motor coils, saving power.
@@ -689,6 +692,8 @@ private:
 
     /// Min step size in microseconds based on maxSpeed
     float _cmin; // at max speed
+
+    bool _areOutputsEnabled;
 
 };
 

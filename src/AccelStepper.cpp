@@ -538,12 +538,18 @@ void AccelStepper::step8(long step)
             break;
     }
 }
+
+bool AccelStepper::areOutputsEnabled()
+{
+    return _areOutputsEnabled;
+}
     
 // Prevents power consumption on the outputs
 void    AccelStepper::disableOutputs()
 {   
     if (! _interface) return;
 
+    _areOutputsEnabled = false;
     setOutputPins(0); // Handles inversion automatically
     if (_enablePin != 0xff)
     {
@@ -556,7 +562,7 @@ void    AccelStepper::enableOutputs()
 {
     if (! _interface) 
 	return;
-
+    _areOutputsEnabled = true;
     pinMode(_pin[0], OUTPUT);
     pinMode(_pin[1], OUTPUT);
     if (_interface == FULL4WIRE || _interface == HALF4WIRE)
