@@ -536,6 +536,9 @@ public:
     /// \return true if the speed is not zero or not at the target position
     bool    isRunning();
 
+    void setExternalCallForPin(bool (*func)(uint8_t pin, uint8_t value));
+    #define PIN_EXTERNAL_FLAG 128
+
 protected:
 
     /// \brief Direction indicator
@@ -694,6 +697,8 @@ private:
     float _cmin; // at max speed
 
     bool _areOutputsEnabled;
+
+    bool (*_externalCallForPin)(uint8_t pin, uint8_t value) = nullptr;
 
 };
 
