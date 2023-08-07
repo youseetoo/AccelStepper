@@ -187,7 +187,7 @@ boolean AccelStepper::run()
     return _speed != 0.0 || distanceToGo() != 0;
 }
 
-AccelStepper::AccelStepper(uint8_t interface, uint8_t pin1, uint8_t pin2, uint8_t pin3, uint8_t pin4, bool enable)
+AccelStepper::AccelStepper(uint8_t interface, uint8_t pin1, uint8_t pin2, uint8_t pin3, uint8_t pin4, bool enable, bool (*externalCallForPin)(uint8_t pin, uint8_t value))
 {
     _interface = interface;
     _currentPos = 0;
@@ -205,6 +205,7 @@ AccelStepper::AccelStepper(uint8_t interface, uint8_t pin1, uint8_t pin2, uint8_
     _pin[2] = pin3;
     _pin[3] = pin4;
     _enableInverted = false;
+    _externalCallForPin = externalCallForPin;
 
     // NEW
     _n = 0;
@@ -354,21 +355,14 @@ void AccelStepper::step(long step)
 // bit 0 of the mask corresponds to _pin[0]
 // bit 1 of the mask corresponds to _pin[1]
 // ....
-void AccelStepper::setOutputPins(uint8_t mask)
+void AccelStepper::setOutputPins(uint8_t pin, uint8_t value)
 {
-    uint8_t numpins = 2;
-    if (_interface == FULL4WIRE || _interface == HALF4WIRE)
-        numpins = 4;
-    else if (_interface == FULL3WIRE || _interface == HALF3WIRE)
-        numpins = 3;
-    uint8_t i;
-    for (i = 0; i < numpins; i++)
+    if (_pin[pin] & PIN_EXTERNAL_FLAG && _externalCallForPin != nullptr)
     {
-        if (_pin[i] & PIN_EXTERNAL_FLAG && _externalCallForPin != nullptr)
-            _externalCallForPin(_pin[i], (mask & (1 << i)) ? (HIGH ^ _pinInverted[i]) : (LOW ^ _pinInverted[i]));
-        else
-            digitalWrite(_pin[i], (mask & (1 << i)) ? (HIGH ^ _pinInverted[i]) : (LOW ^ _pinInverted[i]));
+        _externalCallForPin(_pin[pin], value ? (HIGH ^ _pinInverted[pin]) : (LOW ^ _pinInverted[pin]));
     }
+    else if (!(_pin[pin] & PIN_EXTERNAL_FLAG))
+        digitalWrite(_pin[pin], value ? (HIGH ^ _pinInverted[pin]) : (LOW ^ _pinInverted[pin]));
 }
 
 // 0 pin step function (ie for functional usage)
@@ -389,12 +383,17 @@ void AccelStepper::step1(long step)
     (void)(step); // Unused
 
     // _pin[0] is step, _pin[1] is direction
-    setOutputPins(_direction ? 0b10 : 0b00); // Set direction first else get rogue pulses
-    setOutputPins(_direction ? 0b11 : 0b01); // step HIGH
+    setOutputPins(0,0);
+    if (_old_direction != _direction)
+    {
+        setOutputPins(1,_direction ? 1 : 0);
+        _old_direction = _direction;
+    }
+
     // Caution 200ns setup time
     // Delay the minimum allowed pulse width
     delayMicroseconds(_minPulseWidth);
-    setOutputPins(_direction ? 0b10 : 0b00); // step LOW
+    setOutputPins(0,1);
 }
 
 // 2 pin step function
@@ -405,19 +404,23 @@ void AccelStepper::step2(long step)
     switch (step & 0x3)
     {
     case 0: /* 01 */
-        setOutputPins(0b10);
+        setOutputPins(0,0);
+        setOutputPins(1,1);
         break;
 
     case 1: /* 11 */
-        setOutputPins(0b11);
+        setOutputPins(0,1);
+        setOutputPins(1,1);
         break;
 
     case 2: /* 10 */
-        setOutputPins(0b01);
+        setOutputPins(0,1);
+        setOutputPins(0,0);
         break;
 
     case 3: /* 00 */
-        setOutputPins(0b00);
+        setOutputPins(0,0);
+        setOutputPins(1,0);
         break;
     }
 }
@@ -429,15 +432,21 @@ void AccelStepper::step3(long step)
     switch (step % 3)
     {
     case 0: // 100
-        setOutputPins(0b100);
+        setOutputPins(0,1);
+        setOutputPins(1,0);
+        setOutputPins(2,0);
         break;
 
     case 1: // 001
-        setOutputPins(0b001);
+        setOutputPins(0,0);
+        setOutputPins(1,0);
+        setOutputPins(2,1);
         break;
 
     case 2: // 010
-        setOutputPins(0b010);
+        setOutputPins(0,0);
+        setOutputPins(1,1);
+        setOutputPins(2,0);
         break;
     }
 }
@@ -450,19 +459,31 @@ void AccelStepper::step4(long step)
     switch (step & 0x3)
     {
     case 0: // 1010
-        setOutputPins(0b0101);
+        setOutputPins(0,0);
+        setOutputPins(1,1);
+        setOutputPins(2,0);
+        setOutputPins(3,1);
         break;
 
     case 1: // 0110
-        setOutputPins(0b0110);
+        setOutputPins(0,0);
+        setOutputPins(1,1);
+        setOutputPins(2,1);
+        setOutputPins(3,0);
         break;
 
     case 2: // 0101
-        setOutputPins(0b1010);
+        setOutputPins(0,1);
+        setOutputPins(1,0);
+        setOutputPins(2,1);
+        setOutputPins(3,0);
         break;
 
     case 3: // 1001
-        setOutputPins(0b1001);
+        setOutputPins(0,1);
+        setOutputPins(1,0);
+        setOutputPins(2,0);
+        setOutputPins(3,1);
         break;
     }
 }
@@ -475,27 +496,39 @@ void AccelStepper::step6(long step)
     switch (step % 6)
     {
     case 0: // 100
-        setOutputPins(0b100);
+        setOutputPins(0,1);
+        setOutputPins(1,0);
+        setOutputPins(2,0);
         break;
 
     case 1: // 101
-        setOutputPins(0b101);
+        setOutputPins(0,1);
+        setOutputPins(1,0);
+        setOutputPins(2,1);
         break;
 
     case 2: // 001
-        setOutputPins(0b001);
+        setOutputPins(0,0);
+        setOutputPins(1,0);
+        setOutputPins(2,1);
         break;
 
     case 3: // 011
-        setOutputPins(0b011);
+        setOutputPins(0,0);
+        setOutputPins(1,1);
+        setOutputPins(2,1);
         break;
 
     case 4: // 010
-        setOutputPins(0b010);
+        setOutputPins(0,0);
+        setOutputPins(1,1);
+        setOutputPins(2,0);
         break;
 
     case 5: // 011
-        setOutputPins(0b110);
+        setOutputPins(0,0);
+        setOutputPins(1,1);
+        setOutputPins(2,1);
         break;
     }
 }
@@ -508,35 +541,59 @@ void AccelStepper::step8(long step)
     switch (step & 0x7)
     {
     case 0: // 1000
-        setOutputPins(0b0001);
+        setOutputPins(0,0);
+        setOutputPins(1,0);
+        setOutputPins(2,0);
+        setOutputPins(3,1);
         break;
 
     case 1: // 1010
-        setOutputPins(0b0101);
+        setOutputPins(0,0);
+        setOutputPins(1,1);
+        setOutputPins(2,0);
+        setOutputPins(3,1);
         break;
 
     case 2: // 0010
-        setOutputPins(0b0100);
+        setOutputPins(0,0);
+        setOutputPins(1,1);
+        setOutputPins(2,0);
+        setOutputPins(3,0);
         break;
 
     case 3: // 0110
-        setOutputPins(0b0110);
+        setOutputPins(0,0);
+        setOutputPins(1,1);
+        setOutputPins(2,1);
+        setOutputPins(3,0);
         break;
 
     case 4: // 0100
-        setOutputPins(0b0010);
+        setOutputPins(0,0);
+        setOutputPins(1,0);
+        setOutputPins(2,1);
+        setOutputPins(3,0);
         break;
 
     case 5: // 0101
-        setOutputPins(0b1010);
+        setOutputPins(0,1);
+        setOutputPins(1,0);
+        setOutputPins(2,1);
+        setOutputPins(3,0);
         break;
 
     case 6: // 0001
-        setOutputPins(0b1000);
+        setOutputPins(0,1);
+        setOutputPins(1,0);
+        setOutputPins(2,0);
+        setOutputPins(3,0);
         break;
 
     case 7: // 1001
-        setOutputPins(0b1001);
+        setOutputPins(0,1);
+        setOutputPins(1,0);
+        setOutputPins(2,0);
+        setOutputPins(3,1);
         break;
     }
 }
@@ -553,7 +610,16 @@ void AccelStepper::disableOutputs()
         return;
 
     _areOutputsEnabled = false;
-    setOutputPins(0); // Handles inversion automatically
+    uint8_t numpins = 2;
+    if (_interface == FULL4WIRE || _interface == HALF4WIRE)
+        numpins = 4;
+    else if (_interface == FULL3WIRE || _interface == HALF3WIRE)
+        numpins = 3;
+    uint8_t i;
+    for (i = 0; i < numpins; i++)
+    {
+        setOutputPins(i,0);
+    }
     if (_enablePin != 0xff)
     {
         if (_enablePin & PIN_EXTERNAL_FLAG && _externalCallForPin != nullptr)
@@ -694,10 +760,4 @@ void AccelStepper::stop()
 bool AccelStepper::isRunning()
 {
     return !(_speed == 0.0 && _targetPos == _currentPos);
-}
-
-void AccelStepper::setExternalCallForPin(
-    bool (*func)(uint8_t pin, uint8_t value))
-{
-    _externalCallForPin = func;
 }

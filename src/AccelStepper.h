@@ -370,7 +370,7 @@ public:
     /// to pin 5.
     /// \param[in] enable If this is true (the default), enableOutputs() will be called to enable
     /// the output pins at construction time.
-    AccelStepper(uint8_t interface = AccelStepper::FULL4WIRE, uint8_t pin1 = 2, uint8_t pin2 = 3, uint8_t pin3 = 4, uint8_t pin4 = 5, bool enable = true);
+    AccelStepper(uint8_t interface = AccelStepper::FULL4WIRE, uint8_t pin1 = 2, uint8_t pin2 = 3, uint8_t pin3 = 4, uint8_t pin4 = 5, bool enable = true,bool (*externalCallForPin)(uint8_t pin, uint8_t value) = nullptr);
 
     /// Alternate Constructor which will call your own functions for forward and backward steps. 
     /// You can have multiple simultaneous steppers, all moving
@@ -535,8 +535,6 @@ public:
     /// Checks to see if the motor is currently running to a target
     /// \return true if the speed is not zero or not at the target position
     bool    isRunning();
-
-    void setExternalCallForPin(bool (*func)(uint8_t pin, uint8_t value));
     #define PIN_EXTERNAL_FLAG 128
 
 protected:
@@ -564,7 +562,7 @@ protected:
     /// bit 1 of the mask corresponds to _pin[1]
     /// You can override this to impment, for example serial chip output insted of using the
     /// output pins directly
-    virtual void   setOutputPins(uint8_t mask);
+    virtual void   setOutputPins(uint8_t pin, uint8_t value);
 
     /// Called to execute a step. Only called when a new step is
     /// required. Subclasses may override to implement new stepping
@@ -623,6 +621,7 @@ protected:
     /// Current direction motor is spinning in
     /// Protected because some peoples subclasses need it to be so
     boolean _direction; // 1 == CW
+    uint8_t _old_direction = -1;
     
 private:
     /// Number of pins on the stepper motor. Permits 2 or 4. 2 pins is a
