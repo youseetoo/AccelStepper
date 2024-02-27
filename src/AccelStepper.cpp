@@ -59,7 +59,7 @@ boolean AccelStepper::runSpeed()
         }
         step(_currentPos);
 
-        _lastStepTime = time; // Caution: does not account for costs in step()
+        _lastStepTime = micros(); // Caution: does not account for costs in step()
 
         return true;
     }
